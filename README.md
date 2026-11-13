@@ -1,10 +1,11 @@
 # slide-puzzle
 
 A minimalist brain-training slide puzzle that runs in your browser, on phones and computers.
-
+```
 **Play it here:** https://madheshiyaraj562-cmyk.github.io/slide-puzzle/
+```
 
-OR
+<h1 style="color: #17377f;">OR</h1>
 
 Scan the QR
 
