@@ -11,7 +11,7 @@ A minimalist brain-training slide puzzle that runs in your browser, on phones an
 Scan the QR
 
 
-<img width="735" height="735" alt="my_qr" src="https://github.com/user-attachments/assets/96cd9c87-1428-4f43-9281-9e6b4c769a66" />
+<img width="805" height="805" alt="my_qr" src="https://github.com/user-attachments/assets/96cd9c87-1428-4f43-9281-9e6b4c769a66" />
 
 ## Why i made this
 
@@ -34,23 +34,33 @@ I also made it as a coding project, to practise Python and JavaScript. It starte
 
 Slide the tiles into the empty space until the numbers are in order, 1 to the last number, with the blank space at the bottom right.
 
-| action | keyboard | touch |
+| action | keyboard | touch / mouse |
 |---|---|---|
-| slide a tile | arrow keys or WASD | tap a tile |
-| restart the same puzzle | R | restart button |
-| new puzzle | N | new button |
-| peek (blind mode) | Space | peek button |
-| back to menu | Esc | menu button |
+| slide a tile | `arrow keys` / `W A S D` | **tap** a tile, or **drag** it |
+| slide a whole row or column | - | drag any tile that is in line with the blank |
+| slide one tile in a direction | - | **swipe** on the board |
+| start playing (after think first or blind study) | `Space` / `Enter` | **go** button |
+| restart same puzzle | `R` | **restart** button |
+| new puzzle | `N` | **new** button |
+| peek (blind mode) | `Space` | **peek** button |
+| back to menu | `Esc` | **menu** button |
 
 ## How the score works
 
 ```
-base      = (scramble x 2 - moves) x 10
-time bonus = seconds left x 5          (only if the timer is on)
-score     = (base + time bonus) x difficulty x board size x blind bonus - peek penalty
+hardness   = total distance of all tiles from their home squares (the minimum moves needed)
+ 
+base       = (hardness × 6 − moves) × 10
+time bonus = seconds left × 5                  (only when the timer is on)
+ 
+score = (base + time bonus)
+        × difficulty × (board size ÷ 9) × blind bonus × level bonus × pressure bonus
+        − peek penalty
 ```
-
-Harder difficulty, bigger boards and blind mode all multiply your score.
+ 
+Harder levels, bigger boards, blind mode (a shorter viewing time gives a bigger bonus), higher levels and pressure mode all multiply your score.
+ 
+---
 
 ## How it is built
 
@@ -58,7 +68,11 @@ A single file with HTML, CSS and vanilla JavaScript, with no frameworks or libra
 
 ## Credits
 
-Based on the Slide Puzzle game by Al Sweigart, from [inventwithpython.com/pygame](http://inventwithpython.com/pygame), released under a Simplified BSD license. Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/).
+Based on the Slide Puzzle game by Al Sweigart, from [inventwithpython.com/pygame](http://inventwithpython.com/pygame), released under a Simplified BSD license.
+
+Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/).
+
+---
 
 #### *Part Of Project Masterpiece*
 Made by [Raj Madheshiya](https://github.com/madheshiyaraj562-cmyk).
