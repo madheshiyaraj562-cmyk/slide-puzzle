@@ -52,15 +52,6 @@ score     = (base + time bonus) x difficulty x board size x blind bonus - peek p
 
 Harder difficulty, bigger boards and blind mode all multiply your score.
 
-## Run it on your computer
-
-1. Download `index.html`.
-2. Double-click it to open it in your browser. No installation needed.
-
-## Change the game
-
-Open `index.html` and look for the `CONFIG` block at the top of the script. You can change the scramble length, move limits, blind-mode timing, number of peeks and score values there.
-
 ## How it is built
 
 A single file with HTML, CSS and vanilla JavaScript, with no frameworks or libraries. Every puzzle is scrambled using only legal moves, so it can always be solved.
