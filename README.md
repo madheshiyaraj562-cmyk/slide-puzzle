@@ -5,7 +5,7 @@ A minimalist brain-training slide puzzle that runs in your browser, on phones an
 **Play it here:** https://madheshiyaraj562-cmyk.github.io/slide-puzzle/
 ```
 
-<h1 style="color: #17377f;">OR</h1>
+<h1 style="color: #FF0000;">OR</h1>
 
 Scan the QR
 
