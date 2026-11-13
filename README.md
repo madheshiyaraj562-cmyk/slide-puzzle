@@ -1,8 +1,10 @@
 # slide-puzzle
 
 A minimalist brain-training slide puzzle that runs in your browser, on phones and computers.
+
+**Play it here:** 
 ```
-**Play it here:** https://madheshiyaraj562-cmyk.github.io/slide-puzzle/
+https://madheshiyaraj562-cmyk.github.io/slide-puzzle/
 ```
 
 <h1 style="color: #FF0000;">OR</h1>
