@@ -4,10 +4,12 @@ A minimalist brain-training slide puzzle that runs in your browser, on phones an
 
 **Play it here:** https://madheshiyaraj562-cmyk.github.io/slide-puzzle/
 
-or 
+OR
 
 Scan the QR
 
+
+<img width="735" height="735" alt="my_qr" src="https://github.com/user-attachments/assets/96cd9c87-1428-4f43-9281-9e6b4c769a66" />
 
 ### Why i made this
 
@@ -65,5 +67,7 @@ A single file with HTML, CSS and vanilla JavaScript, with no frameworks or libra
 
 Based on the Slide Puzzle game by Al Sweigart, from [inventwithpython.com/pygame](http://inventwithpython.com/pygame), released under a Simplified BSD license. Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/).
 
+#### *Part Of Project Masterpiece*
 Made by [Raj Madheshiya](https://github.com/madheshiyaraj562-cmyk).
+
 MIT License
