@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>slide puzzle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ===== colour variables (only ONE accent) ===== */
+:root {
+  --bg: #111111;      /* page background */
+  --tile: #1e1e1e;    /* tile fill */
+  --line: #2a2a2a;    /* thin outlines */
+  --text: #e6e6e6;    /* main text */
+  --muted: #777777;   /* secondary text */
+  --accent: #7ee787;  /* selected, solved, score */
+  --board-size: min(92vw, 58vh, 520px);
+}
+
+/* ===== base ===== */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  background: var(--bg); color: var(--text);
+  font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  text-transform: lowercase;
+}
+body[data-screen="game"], body[data-screen="solved"], body[data-screen="timeup"] { overflow: hidden; }
+
+/* ===== screens: only one visible at a time (controlled by data-screen on <body>) ===== */
+.screen { display: none; }
+body[data-screen="menu"] #menu { display: flex; }
+body[data-screen="game"] #game,
+body[data-screen="solved"] #game,
+body[data-screen="timeup"] #game { display: flex; }
+body[data-screen="solved"] #solved { display: flex; }
+body[data-screen="timeup"] #timeup { display: flex; }
+.hidden { display: none !important; }
+
+/* ===== buttons ===== */
+.btn {
+  min-height: 44px; padding: 0 16px;
+  background: transparent; color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px;
+  font: inherit; font-size: 14px; text-transform: lowercase;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.selected { border-color: var(--accent); color: var(--accent); }
+.btn:disabled { opacity: .35; cursor: default; }
+.btn:disabled:hover { border-color: var(--line); }
+
+/* ===== menu ===== */
+#menu {
+  flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100%; padding: 24px 16px; gap: 22px;
+}
+#menu h1 { margin: 0; font-size: 28px; font-weight: 600; }
+.subtitle { color: var(--muted); font-size: 13px; margin-top: -14px; }
+.row { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.row > label { color: var(--muted); font-size: 12px; }
+.group { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.minutes-input {
+  width: 96px; min-height: 44px; padding: 0 10px; text-align: center;
+  background: transparent; color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 14px;
+}
+.minutes-input::placeholder { color: var(--muted); }
+#start-btn { min-width: 200px; font-size: 16px; border-color: var(--accent); color: var(--accent); }
+#best-line { color: var(--muted); font-size: 12px; min-height: 16px; }
+
+/* ===== game ===== */
+#game {
+  flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 14px; padding: 12px;
+}
+#hud {
+  width: var(--board-size); display: flex; justify-content: space-between; gap: 8px;
+  color: var(--muted); font-size: 13px; flex-wrap: wrap;
+}
+#hud .accent, #score { color: var(--accent); }
+#hud .low { color: var(--accent); }
+#blind-info { width: var(--board-size); text-align: center; color: var(--muted); font-size: 12px; min-height: 16px; }
+
+#board {
+  position: relative; width: var(--board-size); aspect-ratio: 1;
+  container-type: size;
+}
+.tile {
+  position: absolute; left: 0; top: 0; padding: 2px;
+  width: calc(100% / var(--n)); height: calc(100% / var(--n));
+  transform: translate(calc(var(--x) * 100%), calc(var(--y) * 100%));
+  transition: transform 120ms ease;
+  cursor: pointer;
+}
+.tile-face {
+  width: 100%; height: 100%; display: grid; place-items: center;
+  background: var(--tile); border: 1px solid var(--line); border-radius: 6px;
+}
+.tile-number {
+  font-size: calc(100cqw / var(--n) * 0.38); font-weight: 600;
+  transition: opacity 600ms; opacity: 1;
+}
+/* blind mode: numbers fade out; .peek brings them back */
+#board.blind .tile-number { opacity: 0; }
+#board.blind.peek .tile-number { opacity: 1; }
+/* solved state */
+#board.solved .tile-face { border-color: var(--accent); }
+#board.solved .tile-number { color: var(--accent); opacity: 1; }
+
+#controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+#hint { color: #444; font-size: 11px; }
+
+/* ===== end overlays (solved / timeup) ===== */
+.overlay {
+  position: fixed; inset: 0; background: rgba(17,17,17,.9);
+  flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px;
+  text-align: center;
+}
+.overlay h2 { margin: 0; font-size: 30px; font-weight: 600; }
+#solved h2, #final-score { color: var(--accent); }
+#final-score { font-size: 22px; }
+.overlay p { margin: 0; color: var(--muted); font-size: 14px; }
+.overlay .group { margin-top: 10px; }
+#new-best { color: var(--accent); font-size: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tile, .tile-number { transition: none; }
+}
+</style>
+</head>
+<body data-screen="menu">
+
+<!-- ================= MENU ================= -->
+<section id="menu" class="screen">
+  <h1>slide puzzle</h1>
+  <div class="subtitle">train your brain under pressure</div>
+
+  <div class="row">
+    <label>timer</label>
+    <div class="group" id="timer-group">
+      <button class="btn option-btn" data-group="timer" data-value="off">off</button>
+      <button class="btn option-btn" data-group="timer" data-value="on">on</button>
+    </div>
+  </div>
+
+  <div class="row hidden" id="minutes-row">
+    <label>minutes</label>
+    <div class="group">
+      <button class="btn option-btn" data-group="preset" data-value="1">1</button>
+      <button class="btn option-btn" data-group="preset" data-value="3">3</button>
+      <button class="btn option-btn" data-group="preset" data-value="5">5</button>
+      <button class="btn option-btn" data-group="preset" data-value="10">10</button>
+      <input id="minutes-input" class="minutes-input" type="number" min="1" max="99" inputmode="numeric" placeholder="custom">
+    </div>
+  </div>
+
+  <div class="row">
+    <label>difficulty</label>
+    <div class="group">
+      <button class="btn option-btn" data-group="diff" data-value="easy">easy</button>
+      <button class="btn option-btn" data-group="diff" data-value="hard">hard</button>
+      <button class="btn option-btn" data-group="diff" data-value="god">god</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>board size</label>
+    <div class="group">
+      <button class="btn option-btn" data-group="size" data-value="3">3x3</button>
+      <button class="btn option-btn" data-group="size" data-value="4">4x4</button>
+      <button class="btn option-btn" data-group="size" data-value="5">5x5</button>
+      <button class="btn option-btn" data-group="size" data-value="6">6x6</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>blind mode</label>
+    <div class="group">
+      <button class="btn option-btn" data-group="blind" data-value="off">off</button>
+      <button class="btn option-btn" data-group="blind" data-value="on">on</button>
+    </div>
+  </div>
+
+  <div id="best-line"></div>
+  <button id="start-btn" class="btn">start</button>
+</section>
+
+<!-- ================= GAME ================= -->
+<section id="game" class="screen">
+  <div id="hud">
+    <span id="time">--:--</span>
+    <span id="moves">moves 0</span>
+    <span id="score">score 0</span>
+  </div>
+  <div id="blind-info"></div>
+  <div id="board" style="--n:4"></div>
+  <div id="controls">
+    <button id="restart-btn" class="btn">restart</button>
+    <button id="new-btn" class="btn">new</button>
+    <button id="peek-btn" class="btn hidden">peek</button>
+    <button id="menu-btn" class="btn">menu</button>
+  </div>
+  <div id="hint">arrows / wasd move · r restart · n new · space peek · esc menu</div>
+</section>
+
+<!-- ================= SOLVED ================= -->
+<section id="solved" class="screen overlay">
+  <h2>solved</h2>
+  <div id="final-score">score 0</div>
+  <div id="new-best" class="hidden">new best!</div>
+  <p id="final-stats"></p>
+  <div class="group">
+    <button id="again-btn" class="btn">play again</button>
+    <button id="solved-menu-btn" class="btn">menu</button>
+  </div>
+</section>
+
+<!-- ================= TIME UP ================= -->
+<section id="timeup" class="screen overlay">
+  <h2 id="fail-msg">time's up</h2>
+  <p id="fail-stats"></p>
+  <div class="group">
+    <button id="retry-btn" class="btn">retry</button>
+    <button id="timeup-new-btn" class="btn">new</button>
+    <button id="timeup-menu-btn" class="btn">menu</button>
+  </div>
+</section>
+
+<script>
+/* =====================================================================
+   TUNABLE CONFIG - change these values to rebalance the game
+   ===================================================================== */
+const CONFIG = {
+  // scramble = how many random moves mix the board
+  // defMin   = default timer minutes if the custom field is empty
+  // moveFactor = move limit = scramble * factor (null = unlimited)
+  // scoreMult  = score multiplier
+  difficulty: {
+    easy: { scramble: 20,  defMin: 5, moveFactor: null, scoreMult: 1 },
+    hard: { scramble: 80,  defMin: 3, moveFactor: 3.0,  scoreMult: 2 },
+    god:  { scramble: 200, defMin: 2, moveFactor: 2.5,  scoreMult: 5 }
+  },
+  blindShowSecs: 3,      // numbers visible at the start
+  blindFadeSecs: 0.6,    // fade-out (also set in CSS: transition on .tile-number)
+  peekSecs: 1,           // how long a peek reveals the numbers
+  maxPeeks: 3,           // peeks allowed per game
+  peekPenalty: 50        // score lost per peek
+};
+
+/* ===================== STATE ===================== */
+const UP = 'up', DOWN = 'down', LEFT = 'left', RIGHT = 'right';
+const OPPOSITE = { up: DOWN, down: UP, left: RIGHT, right: LEFT };
+
+// menu choices
+const settings = { timerOn: false, preset: 5, diff: 'easy', size: 4, blind: false };
+// current game (null when in menu)
+let g = null;
+let timerId = null;
+
+const $ = (id) => document.getElementById(id);
+const boardEl = $('board');
+
+/* ===================== SCREEN SWITCHING ===================== */
+function setScreen(name) { document.body.dataset.screen = name; }
+
+/* ===================== BOARD LOGIC =====================
+   board[x][y] = tile number, or null for the blank (same layout as the Python version). */
+
+// Solved board: 1..n*n-1 left-to-right, top-to-bottom, blank at the bottom-right.
+function startingBoard(n) {
+  const b = [];
+  for (let x = 0; x < n; x++) {
+    b.push([]);
+    for (let y = 0; y < n; y++) b[x].push(y * n + x + 1);
+  }
+  b[n - 1][n - 1] = null;
+  return b;
+}
+
+function copyBoard(b) { return b.map(col => col.slice()); }
+
+// Find the blank tile.
+function blankPos(b) {
+  for (let x = 0; x < b.length; x++)
+    for (let y = 0; y < b.length; y++)
+      if (b[x][y] === null) return { x, y };
+}
+
+// Is this move legal? (a "move" is the direction the neighbouring tile slides)
+function isValidMove(b, move) {
+  const n = b.length, { x, y } = blankPos(b);
+  return (move === UP && y < n - 1) || (move === DOWN && y > 0) ||
+         (move === LEFT && x < n - 1) || (move === RIGHT && x > 0);
+}
+
+// Swap the blank with the neighbouring tile (does NOT check validity).
+function makeMove(b, move) {
+  const { x, y } = blankPos(b);
+  let tx = x, ty = y;
+  if (move === UP) ty = y + 1;
+  else if (move === DOWN) ty = y - 1;
+  else if (move === LEFT) tx = x + 1;
+  else if (move === RIGHT) tx = x - 1;
+  [b[x][y], b[tx][ty]] = [b[tx][ty], b[x][y]];
+}
+
+// Pick a random legal move, never the exact reverse of the last one.
+function randomMove(b, last) {
+  const options = [UP, DOWN, LEFT, RIGHT].filter(m =>
+    isValidMove(b, m) && (!last || m !== OPPOSITE[last]));
+  return options[Math.floor(Math.random() * options.length)];
+}
+
+function boardsEqual(a, b) {
+  return a.every((col, x) => col.every((v, y) => v === b[x][y]));
+}
+
+// Scramble with legal moves only, so every puzzle is always solvable.
+function generatePuzzle(n, slides) {
+  const solved = startingBoard(n);
+  let b, last;
+  do {
+    b = startingBoard(n); last = null;
+    for (let i = 0; i < slides; i++) {
+      const m = randomMove(b, last);
+      makeMove(b, m);
+      last = m;
+    }
+  } while (boardsEqual(b, solved));
+  return b;
+}
+
+/* ===================== SCORE =====================
+   base       = max(1, scramble*2 - moves) * 10        fewer moves = higher
+   timeBonus  = secondsLeft * 5                        only when timer is on
+   raw        = base + timeBonus
+   score      = raw * difficultyMult * (size*size/9) * (blind ? 2 : 1) - peeks*penalty   (min 0) */
+function computeScore(moves, timeLeft) {
+  const d = CONFIG.difficulty[g.diff];
+  const base = Math.max(1, g.scramble * 2 - moves) * 10;
+  const bonus = (g.timerSecs !== null && timeLeft) ? Math.floor(timeLeft * 5) : 0;
+  const mult = d.scoreMult * (g.n * g.n) / 9 * (g.blind ? 2 : 1);
+  return Math.max(0, Math.floor((base + bonus) * mult) - g.peeks * CONFIG.peekPenalty);
+}
+
+/* ===================== BEST SCORES (localStorage) ===================== */
+function scoreKey(diff, n, blind) { return `${diff}_${n}x${n}_${blind ? 'blind' : 'normal'}`; }
+
+function loadScores() {
+  try { return JSON.parse(localStorage.getItem('slidepuzzle_best')) || {}; }
+  catch (e) { return {}; }
+}
+function saveScore(key, val) {
+  try {
+    const data = loadScores(); data[key] = val;
+    localStorage.setItem('slidepuzzle_best', JSON.stringify(data));
+  } catch (e) { /* storage unavailable - ignore */ }
+}
+
+/* ===================== MENU ===================== */
+// Highlight the selected buttons and show/hide the minutes row.
+function renderMenu() {
+  const sel = {
+    timer: settings.timerOn ? 'on' : 'off',
+    diff: settings.diff,
+    size: String(settings.size),
+    blind: settings.blind ? 'on' : 'off',
+    preset: $('minutes-input').value === '' ? String(settings.preset) : ''
+  };
+  document.querySelectorAll('.option-btn').forEach(btn => {
+    btn.classList.toggle('selected', sel[btn.dataset.group] === btn.dataset.value);
+  });
+  $('minutes-row').classList.toggle('hidden', !settings.timerOn);
+
+  const best = loadScores()[scoreKey(settings.diff, settings.size, settings.blind)];
+  $('best-line').textContent = best !== undefined ? `best  ${best}` : '';
+}
+
+document.querySelectorAll('.option-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const v = btn.dataset.value;
+    switch (btn.dataset.group) {
+      case 'timer':  settings.timerOn = (v === 'on'); break;
+      case 'diff':   settings.diff = v; break;
+      case 'size':   settings.size = parseInt(v, 10); break;
+      case 'blind':  settings.blind = (v === 'on'); break;
+      case 'preset': settings.preset = parseInt(v, 10); $('minutes-input').value = ''; break;
+    }
+    renderMenu();
+  });
+});
+$('minutes-input').addEventListener('input', renderMenu);
+
+// Work out the timer length in seconds (null = timer off). Bad input falls back to a default.
+function chosenTimerSecs() {
+  if (!settings.timerOn) return null;
+  let mins = parseInt($('minutes-input').value, 10);
+  if (isNaN(mins) || mins <= 0) {
+    mins = $('minutes-input').value === '' ? settings.preset : CONFIG.difficulty[settings.diff].defMin;
+  }
+  return Math.min(mins, 99) * 60;
+}
+
+/* ===================== GAME SETUP ===================== */
+function startGame() {
+  const d = CONFIG.difficulty[settings.diff];
+  const n = settings.size;
+  g = {
+    n,
+    diff: settings.diff,
+    scramble: d.scramble,
+    blind: settings.blind,
+    timerSecs: chosenTimerSecs(),
+    moveLimit: d.moveFactor ? Math.floor(d.scramble * d.moveFactor) : null,
+    board: null, initial: null,
+    moves: 0, peeks: 0,
+    startTime: 0, peeking: false,
+    over: false, tiles: {}
+  };
+  newPuzzle();
+  buildTiles();
+  setScreen('game');
+  startLoop();
+}
+
+// Generate a fresh puzzle with the same settings.
+function newPuzzle() {
+  g.board = generatePuzzle(g.n, g.scramble);
+  g.initial = copyBoard(g.board);
+  resetRun();
+}
+
+// Reset counters and timer (keeps the current puzzle).
+function resetRun() {
+  g.moves = 0; g.peeks = 0; g.peeking = false; g.over = false;
+  g.startTime = performance.now();
+  boardEl.classList.remove('solved', 'blind', 'peek');
+  setScreen('game');
+  render();
+  updateHud();
+  startLoop();
+}
+
+function restartGame() { g.board = copyBoard(g.initial); resetRun(); }
+function newGame() { newPuzzle(); }
+
+// Create one DOM tile per number (kept between moves so CSS can animate them).
+function buildTiles() {
+  boardEl.innerHTML = '';
+  boardEl.style.setProperty('--n', g.n);
+  g.tiles = {};
+  for (let num = 1; num < g.n * g.n; num++) {
+    const t = document.createElement('div');
+    t.className = 'tile';
+    t.innerHTML = '<div class="tile-face"><span class="tile-number">' + num + '</span></div>';
+    t.addEventListener('click', () => onTileClick(num));
+    boardEl.appendChild(t);
+    g.tiles[num] = t;
+  }
+  $('peek-btn').classList.toggle('hidden', !g.blind);
+  render();
+}
+
+// Move every tile to its board position (CSS transition does the sliding).
+function render() {
+  for (let x = 0; x < g.n; x++)
+    for (let y = 0; y < g.n; y++) {
+      const v = g.board[x][y];
+      if (v !== null && g.tiles[v]) {
+        g.tiles[v].style.setProperty('--x', x);
+        g.tiles[v].style.setProperty('--y', y);
+      }
+    }
+}
+
+/* ===================== PLAYING ===================== */
+function elapsedSecs() { return (performance.now() - g.startTime) / 1000; }
+function timeLeftSecs() { return g.timerSecs === null ? null : g.timerSecs - elapsedSecs(); }
+
+function slide(move) {
+  if (!g || g.over || !isValidMove(g.board, move)) return;
+  makeMove(g.board, move);
+  g.moves++;
+  render();
+
+  if (boardsEqual(g.board, startingBoard(g.n))) { winGame(); return; }
+  if (g.moveLimit && g.moves >= g.moveLimit) { loseGame('no moves left'); return; }
+  updateHud();
+}
+
+// Clicking a tile slides it only if it is next to the blank.
+function onTileClick(num) {
+  if (!g || g.over) return;
+  let tx, ty;
+  for (let x = 0; x < g.n; x++)
+    for (let y = 0; y < g.n; y++) if (g.board[x][y] === num) { tx = x; ty = y; }
+  const { x: bx, y: by } = blankPos(g.board);
+  if (tx === bx + 1 && ty === by) slide(LEFT);
+  else if (tx === bx - 1 && ty === by) slide(RIGHT);
+  else if (tx === bx && ty === by + 1) slide(UP);
+  else if (tx === bx && ty === by - 1) slide(DOWN);
+}
+
+// Show the numbers for a moment (blind mode only, limited uses, costs score).
+function peek() {
+  if (!g || g.over || !g.blind || g.peeking) return;
+  if (elapsedSecs() < CONFIG.blindShowSecs + CONFIG.blindFadeSecs) return;
+  if (g.peeks >= CONFIG.maxPeeks) return;
+  g.peeks++;
+  g.peeking = true;
+  boardEl.classList.add('peek');
+  updateHud();
+  setTimeout(() => {
+    boardEl.classList.remove('peek');
+    if (g) g.peeking = false;
+  }, CONFIG.peekSecs * 1000);
+}
+
+function formatTime(secs) {
+  secs = Math.max(0, Math.floor(secs));
+  return String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(secs % 60).padStart(2, '0');
+}
+
+// Refresh the HUD text.
+function updateHud() {
+  const tl = timeLeftSecs();
+  const timeEl = $('time');
+  if (tl === null) {
+    timeEl.textContent = formatTime(elapsedSecs());   // timer off: count up, just for info
+    timeEl.classList.remove('low');
+  } else {
+    timeEl.textContent = formatTime(Math.ceil(tl));
+    timeEl.classList.toggle('low', tl <= 30);
+  }
+  $('moves').textContent = 'moves ' + g.moves + (g.moveLimit ? ' / ' + g.moveLimit : '');
+  $('score').textContent = 'score ' + computeScore(g.moves, tl === null ? 0 : Math.max(0, tl));
+
+  const info = $('blind-info');
+  if (!g.blind) { info.textContent = ''; return; }
+  const e = elapsedSecs();
+  info.textContent = e < CONFIG.blindShowSecs
+    ? 'memorise  ' + Math.ceil(CONFIG.blindShowSecs - e)
+    : 'peeks ' + g.peeks + '/' + CONFIG.maxPeeks + '  [space]';
+}
+
+// Runs ~10 times per second: timer, blind-mode fade, HUD.
+function startLoop() {
+  clearInterval(timerId);
+  timerId = setInterval(() => {
+    if (!g || g.over) return;
+    if (g.blind && elapsedSecs() >= CONFIG.blindShowSecs) boardEl.classList.add('blind');
+    const tl = timeLeftSecs();
+    if (tl !== null && tl <= 0) { loseGame("time's up"); return; }
+    updateHud();
+  }, 100);
+}
+
+function stopLoop() { clearInterval(timerId); timerId = null; }
+
+/* ===================== END OF GAME ===================== */
+function winGame() {
+  g.over = true; stopLoop();
+  const tl = timeLeftSecs();
+  const score = computeScore(g.moves, tl === null ? 0 : Math.max(0, tl));
+  const key = scoreKey(g.diff, g.n, g.blind);
+  const best = loadScores()[key];
+  const isBest = best === undefined || score > best;
+  if (isBest) saveScore(key, score);
+
+  boardEl.classList.remove('blind', 'peek');
+  boardEl.classList.add('solved');
+  $('final-score').textContent = 'score ' + score;
+  $('new-best').classList.toggle('hidden', !isBest);
+  $('final-stats').textContent = 'moves ' + g.moves + '  ·  time ' + formatTime(elapsedSecs());
+  setScreen('solved');
+}
+
+function loseGame(reason) {
+  g.over = true; stopLoop();
+  $('fail-msg').textContent = reason;
+  $('fail-stats').textContent = 'moves ' + g.moves;
+  setScreen('timeup');
+}
+
+function goMenu() {
+  if (g) g.over = true;
+  stopLoop();
+  g = null;
+  renderMenu();
+  setScreen('menu');
+}
+
+/* ===================== BUTTONS ===================== */
+$('start-btn').addEventListener('click', startGame);
+$('restart-btn').addEventListener('click', restartGame);
+$('new-btn').addEventListener('click', newGame);
+$('peek-btn').addEventListener('click', peek);
+$('menu-btn').addEventListener('click', goMenu);
+$('again-btn').addEventListener('click', newGame);
+$('solved-menu-btn').addEventListener('click', goMenu);
+$('retry-btn').addEventListener('click', restartGame);
+$('timeup-new-btn').addEventListener('click', newGame);
+$('timeup-menu-btn').addEventListener('click', goMenu);
+
+/* ===================== KEYBOARD ===================== */
+document.addEventListener('keydown', (e) => {
+  if (!g) return;                                   // keys only matter in a game
+  if (e.target && e.target.tagName === 'INPUT') return;
+  const screen = document.body.dataset.screen;
+  const k = e.key.toLowerCase();
+
+  if (k === 'escape') { goMenu(); return; }
+  if (k === 'n') { newGame(); return; }
+  if (k === 'r') { restartGame(); return; }
+
+  if (screen !== 'game') return;
+  if (k === ' ') { e.preventDefault(); peek(); return; }
+  const map = { arrowleft: LEFT, a: LEFT, arrowright: RIGHT, d: RIGHT,
+                arrowup: UP, w: UP, arrowdown: DOWN, s: DOWN };
+  if (map[k]) { e.preventDefault(); slide(map[k]); }
+});
+
+/* ===================== INIT ===================== */
+renderMenu();
+</script>
+</body>
+</html>
