@@ -66,3 +66,4 @@ A single file with HTML, CSS and vanilla JavaScript, with no frameworks or libra
 Based on the Slide Puzzle game by Al Sweigart, from [inventwithpython.com/pygame](http://inventwithpython.com/pygame), released under a Simplified BSD license. Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/).
 
 Made by [Raj Madheshiya](https://github.com/madheshiyaraj562-cmyk).
+MIT License
