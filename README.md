@@ -12,13 +12,13 @@ Scan the QR
 
 <img width="735" height="735" alt="my_qr" src="https://github.com/user-attachments/assets/96cd9c87-1428-4f43-9281-9e6b4c769a66" />
 
-### Why i made this
+## Why i made this
 
 I wanted a simple game that trains my brain to think ahead and to stay calm under pressure. A normal slide puzzle makes you plan your moves. Adding a timer, a move limit and harder difficulty levels makes you do it while the clock is running. Blind mode goes one step further: the numbers disappear and you have to solve the puzzle from memory.
 
 I also made it as a coding project, to practise Python and JavaScript. It started as a pygame game in Python and I turned it into a single web page so anyone can play it on any device with just a link.
 
-### Features
+## Features
 
 - **timer on/off:** choose 1, 3, 5 or 10 minutes, or type your own
 - **difficulty:** easy, hard and god (more scrambling, shorter time, move limits)
@@ -29,7 +29,7 @@ I also made it as a coding project, to practise Python and JavaScript. It starte
 - **minimal design:** dark flat theme, one accent colour, JetBrains Mono font
 - **works on mobile:** tap a tile to slide it
 
-### How to play
+## How to play
 
 Slide the tiles into the empty space until the numbers are in order, 1 to the last number, with the blank space at the bottom right.
 
