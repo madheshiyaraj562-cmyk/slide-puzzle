@@ -16,7 +16,8 @@
   --text: #e6e6e6;    /* main text */
   --muted: #777777;   /* secondary text */
   --accent: #7ee787;  /* selected, solved, score */
-  --board-size: min(92vw, 58vh, 520px);
+  --board-size: min(92vw, 56vh, 520px);
+  --fade: 0.6s;       /* blind-mode fade time (set from CONFIG in the script) */
 }
 
 /* ===== base ===== */
@@ -52,19 +53,19 @@ body[data-screen="timeup"] #timeup { display: flex; }
 .btn:hover { border-color: var(--accent); }
 .btn:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn.selected { border-color: var(--accent); color: var(--accent); }
-.btn:disabled { opacity: .35; cursor: default; }
-.btn:disabled:hover { border-color: var(--line); }
 
 /* ===== menu ===== */
 #menu {
   flex-direction: column; align-items: center; justify-content: center;
-  min-height: 100%; padding: 24px 16px; gap: 22px;
+  min-height: 100%; padding: 24px 16px; gap: 18px;
 }
 #menu h1 { margin: 0; font-size: 28px; font-weight: 600; }
-.subtitle { color: var(--muted); font-size: 13px; margin-top: -14px; }
-.row { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.subtitle { color: var(--muted); font-size: 13px; margin-top: -10px; }
+.row { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 .row > label { color: var(--muted); font-size: 12px; }
+.row > label span { opacity: .6; }
 .group { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+#blind-rows { display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .minutes-input {
   width: 96px; min-height: 44px; padding: 0 10px; text-align: center;
   background: transparent; color: var(--text);
@@ -77,34 +78,45 @@ body[data-screen="timeup"] #timeup { display: flex; }
 /* ===== game ===== */
 #game {
   flex-direction: column; align-items: center; justify-content: center;
-  height: 100%; gap: 14px; padding: 12px;
+  height: 100%; gap: 12px; padding: 12px;
 }
 #hud {
   width: var(--board-size); display: flex; justify-content: space-between; gap: 8px;
   color: var(--muted); font-size: 13px; flex-wrap: wrap;
 }
-#hud .accent, #score { color: var(--accent); }
 #hud .low { color: var(--accent); }
-#blind-info { width: var(--board-size); text-align: center; color: var(--muted); font-size: 12px; min-height: 16px; }
+#score { color: var(--accent); }
+#info { width: var(--board-size); text-align: center; color: var(--muted); font-size: 12px; min-height: 16px; }
+#info.study { color: var(--accent); }
+
+/* pressure bar: fills up while you hesitate, the board moves when it is full */
+#pressure { width: var(--board-size); height: 2px; background: var(--line); }
+#pressure-bar { height: 100%; width: 0; background: var(--muted); transition: width 100ms linear; }
+#pressure.hot #pressure-bar { background: var(--accent); }
 
 #board {
   position: relative; width: var(--board-size); aspect-ratio: 1;
   container-type: size;
+  touch-action: none;           /* we handle drag and swipe ourselves */
+  user-select: none; -webkit-user-select: none;
 }
 .tile {
   position: absolute; left: 0; top: 0; padding: 2px;
   width: calc(100% / var(--n)); height: calc(100% / var(--n));
-  transform: translate(calc(var(--x) * 100%), calc(var(--y) * 100%));
-  transition: transform 120ms ease;
-  cursor: pointer;
+  /* --x/--y = grid position, --dx/--dy = live drag offset in px */
+  transform: translate(calc(var(--x) * 100% + var(--dx, 0px)), calc(var(--y) * 100% + var(--dy, 0px)));
+  transition: transform 150ms cubic-bezier(.2, .8, .2, 1);
+  will-change: transform;
+  cursor: grab;
 }
+.tile.dragging { transition: none; z-index: 2; cursor: grabbing; }
 .tile-face {
   width: 100%; height: 100%; display: grid; place-items: center;
   background: var(--tile); border: 1px solid var(--line); border-radius: 6px;
 }
 .tile-number {
   font-size: calc(100cqw / var(--n) * 0.38); font-weight: 600;
-  transition: opacity 600ms; opacity: 1;
+  transition: opacity var(--fade); opacity: 1;
 }
 /* blind mode: numbers fade out; .peek brings them back */
 #board.blind .tile-number { opacity: 0; }
@@ -114,7 +126,8 @@ body[data-screen="timeup"] #timeup { display: flex; }
 #board.solved .tile-number { color: var(--accent); opacity: 1; }
 
 #controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-#hint { color: #444; font-size: 11px; }
+#go-btn { border-color: var(--accent); color: var(--accent); }
+#hint { color: #555; font-size: 11px; text-align: center; max-width: var(--board-size); }
 
 /* ===== end overlays (solved / timeup) ===== */
 .overlay {
@@ -130,7 +143,7 @@ body[data-screen="timeup"] #timeup { display: flex; }
 #new-best { color: var(--accent); font-size: 14px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .tile, .tile-number { transition: none; }
+  .tile, .tile-number, #pressure-bar { transition: none; }
 }
 </style>
 </head>
@@ -143,7 +156,7 @@ body[data-screen="timeup"] #timeup { display: flex; }
 
   <div class="row">
     <label>timer</label>
-    <div class="group" id="timer-group">
+    <div class="group">
       <button class="btn option-btn" data-group="timer" data-value="off">off</button>
       <button class="btn option-btn" data-group="timer" data-value="on">on</button>
     </div>
@@ -180,10 +193,79 @@ body[data-screen="timeup"] #timeup { display: flex; }
   </div>
 
   <div class="row">
-    <label>blind mode</label>
+    <label>blind mode <span>numbers fade, solve from memory</span></label>
     <div class="group">
       <button class="btn option-btn" data-group="blind" data-value="off">off</button>
       <button class="btn option-btn" data-group="blind" data-value="on">on</button>
+    </div>
+  </div>
+
+  <div id="blind-rows" class="hidden">
+    <div class="row">
+      <label>see the numbers for <span>seconds, board locked</span></label>
+      <div class="group">
+        <button class="btn option-btn" data-group="blindsecs" data-value="3">3</button>
+        <button class="btn option-btn" data-group="blindsecs" data-value="5">5</button>
+        <button class="btn option-btn" data-group="blindsecs" data-value="10">10</button>
+        <button class="btn option-btn" data-group="blindsecs" data-value="15">15</button>
+        <input id="blind-input" class="minutes-input" type="number" min="1" max="60" inputmode="numeric" placeholder="custom">
+      </div>
+    </div>
+    <div class="row">
+      <label>peeks <span>per game</span></label>
+      <div class="group">
+        <button class="btn option-btn" data-group="peeks" data-value="0">0</button>
+        <button class="btn option-btn" data-group="peeks" data-value="1">1</button>
+        <button class="btn option-btn" data-group="peeks" data-value="3">3</button>
+        <button class="btn option-btn" data-group="peeks" data-value="5">5</button>
+        <input id="peeks-input" class="minutes-input" type="number" min="0" max="50" inputmode="numeric" placeholder="custom">
+      </div>
+    </div>
+    <div class="row">
+      <label>peek lasts <span>seconds the numbers show</span></label>
+      <div class="group">
+        <button class="btn option-btn" data-group="peeksecs" data-value="0.5">0.5</button>
+        <button class="btn option-btn" data-group="peeksecs" data-value="1">1</button>
+        <button class="btn option-btn" data-group="peeksecs" data-value="2">2</button>
+        <button class="btn option-btn" data-group="peeksecs" data-value="3">3</button>
+        <input id="peeksecs-input" class="minutes-input" type="number" min="0.5" max="10" step="0.5" inputmode="decimal" placeholder="custom">
+      </div>
+    </div>
+    <div class="row">
+      <label>peek cost <span>score lost per peek</span></label>
+      <div class="group">
+        <button class="btn option-btn" data-group="peekcost" data-value="0">free</button>
+        <button class="btn option-btn" data-group="peekcost" data-value="50">50</button>
+        <button class="btn option-btn" data-group="peekcost" data-value="100">100</button>
+        <button class="btn option-btn" data-group="peekcost" data-value="200">200</button>
+        <input id="peekcost-input" class="minutes-input" type="number" min="0" max="1000" inputmode="numeric" placeholder="custom">
+      </div>
+    </div>
+  </div>
+
+  <div class="row" id="think-row">
+    <label>think first <span>board locked, plan before you move</span></label>
+    <div class="group">
+      <button class="btn option-btn" data-group="think" data-value="0">off</button>
+      <button class="btn option-btn" data-group="think" data-value="10">10s</button>
+      <button class="btn option-btn" data-group="think" data-value="20">20s</button>
+      <button class="btn option-btn" data-group="think" data-value="30">30s</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>pressure <span>the board moves by itself if you stall</span></label>
+    <div class="group">
+      <button class="btn option-btn" data-group="pressure" data-value="off">off</button>
+      <button class="btn option-btn" data-group="pressure" data-value="on">on</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>level up <span>every win makes the next puzzle harder</span></label>
+    <div class="group">
+      <button class="btn option-btn" data-group="adaptive" data-value="off">off</button>
+      <button class="btn option-btn" data-group="adaptive" data-value="on">on</button>
     </div>
   </div>
 
@@ -198,15 +280,17 @@ body[data-screen="timeup"] #timeup { display: flex; }
     <span id="moves">moves 0</span>
     <span id="score">score 0</span>
   </div>
-  <div id="blind-info"></div>
+  <div id="pressure" class="hidden"><div id="pressure-bar"></div></div>
+  <div id="info"></div>
   <div id="board" style="--n:4"></div>
   <div id="controls">
+    <button id="go-btn" class="btn hidden">go</button>
     <button id="restart-btn" class="btn">restart</button>
     <button id="new-btn" class="btn">new</button>
     <button id="peek-btn" class="btn hidden">peek</button>
     <button id="menu-btn" class="btn">menu</button>
   </div>
-  <div id="hint">arrows / wasd move · r restart · n new · space peek · esc menu</div>
+  <div id="hint">drag, tap or swipe · arrows / wasd · r restart · n new · space peek or go · esc menu</div>
 </section>
 
 <!-- ================= SOLVED ================= -->
@@ -215,6 +299,7 @@ body[data-screen="timeup"] #timeup { display: flex; }
   <div id="final-score">score 0</div>
   <div id="new-best" class="hidden">new best!</div>
   <p id="final-stats"></p>
+  <p id="final-rating"></p>
   <div class="group">
     <button id="again-btn" class="btn">play again</button>
     <button id="solved-menu-btn" class="btn">menu</button>
@@ -237,40 +322,31 @@ body[data-screen="timeup"] #timeup { display: flex; }
    TUNABLE CONFIG - change these values to rebalance the game
    ===================================================================== */
 const CONFIG = {
-  // scramble = how many random moves mix the board
-  // defMin   = default timer minutes if the custom field is empty
-  // moveFactor = move limit = scramble * factor (null = unlimited)
-  // scoreMult  = score multiplier
   difficulty: {
-    easy: { scramble: 20,  defMin: 5, moveFactor: null, scoreMult: 1 },
-    hard: { scramble: 80,  defMin: 3, moveFactor: 3.0,  scoreMult: 2 },
-    god:  { scramble: 200, defMin: 2, moveFactor: 2.5,  scoreMult: 5 }
+    // scramble   = how many moves the scrambler makes
+    // smart      = chance (0 to 1) that each scramble move makes the puzzle MORE disordered
+    //              (0 = pure random, higher = much harder puzzles)
+    // attempts   = how many puzzles are generated; the hardest one is kept
+    // moveFactor = move limit = hardness x factor (null = unlimited)
+    // idleSecs   = pressure mode: seconds you can stall on a 4x4 before the board moves
+    // defMin     = default timer minutes if the custom box has a bad value
+    // scoreMult  = score multiplier
+    easy: { scramble: 20,  smart: 0,    attempts: 1, moveFactor: null, idleSecs: 15, defMin: 5, scoreMult: 1 },
+    hard: { scramble: 80,  smart: 0.35, attempts: 1, moveFactor: 7,    idleSecs: 10, defMin: 3, scoreMult: 2 },
+    god:  { scramble: 200, smart: 0.85, attempts: 8, moveFactor: 5.5,  idleSecs: 6,  defMin: 2, scoreMult: 5 }
   },
-  blindShowSecs: 3,      // numbers visible at the start
-  blindFadeSecs: 0.6,    // fade-out (also set in CSS: transition on .tile-number)
-  peekSecs: 1,           // how long a peek reveals the numbers
-  maxPeeks: 3,           // peeks allowed per game
-  peekPenalty: 50        // score lost per peek
+  blindFadeSecs: 0.6,    // how long the numbers take to fade out
+  peekSecs: 1,           // how long a peek shows the numbers
+  peekPenalty: 50,       // score lost per peek
+  maxLevel: 8,           // level-up mode: highest level
+  levelStep: 0.25        // level-up mode: each level adds this much scrambling (0.25 = +25%)
 };
 
-/* ===================== STATE ===================== */
+/*LOGIC-START*/
+/* ===================== BOARD LOGIC =====================
+   board[x][y] = tile number, or null for the blank. */
 const UP = 'up', DOWN = 'down', LEFT = 'left', RIGHT = 'right';
 const OPPOSITE = { up: DOWN, down: UP, left: RIGHT, right: LEFT };
-
-// menu choices
-const settings = { timerOn: false, preset: 5, diff: 'easy', size: 4, blind: false };
-// current game (null when in menu)
-let g = null;
-let timerId = null;
-
-const $ = (id) => document.getElementById(id);
-const boardEl = $('board');
-
-/* ===================== SCREEN SWITCHING ===================== */
-function setScreen(name) { document.body.dataset.screen = name; }
-
-/* ===================== BOARD LOGIC =====================
-   board[x][y] = tile number, or null for the blank (same layout as the Python version). */
 
 // Solved board: 1..n*n-1 left-to-right, top-to-bottom, blank at the bottom-right.
 function startingBoard(n) {
@@ -284,6 +360,8 @@ function startingBoard(n) {
 }
 
 function copyBoard(b) { return b.map(col => col.slice()); }
+function boardKey(b) { return b.map(col => col.join(',')).join('|'); }
+function boardsEqual(a, b) { return a.every((col, x) => col.every((v, y) => v === b[x][y])); }
 
 // Find the blank tile.
 function blankPos(b) {
@@ -310,94 +388,193 @@ function makeMove(b, move) {
   [b[x][y], b[tx][ty]] = [b[tx][ty], b[x][y]];
 }
 
-// Pick a random legal move, never the exact reverse of the last one.
-function randomMove(b, last) {
-  const options = [UP, DOWN, LEFT, RIGHT].filter(m =>
-    isValidMove(b, m) && (!last || m !== OPPOSITE[last]));
-  return options[Math.floor(Math.random() * options.length)];
-}
-
-function boardsEqual(a, b) {
-  return a.every((col, x) => col.every((v, y) => v === b[x][y]));
-}
-
-// Scramble with legal moves only, so every puzzle is always solvable.
-function generatePuzzle(n, slides) {
-  const solved = startingBoard(n);
-  let b, last;
-  do {
-    b = startingBoard(n); last = null;
-    for (let i = 0; i < slides; i++) {
-      const m = randomMove(b, last);
-      makeMove(b, m);
-      last = m;
+// Hardness rating: total distance of every tile from its home square.
+// It is the minimum number of moves needed, so a higher number = a harder puzzle.
+function manhattan(b) {
+  const n = b.length;
+  let d = 0;
+  for (let x = 0; x < n; x++)
+    for (let y = 0; y < n; y++) {
+      const v = b[x][y];
+      if (v !== null) d += Math.abs(x - (v - 1) % n) + Math.abs(y - Math.floor((v - 1) / n));
     }
-  } while (boardsEqual(b, solved));
+  return d;
+}
+
+// All legal moves that are not the exact reverse of the last move.
+function forwardMoves(b, last) {
+  return [UP, DOWN, LEFT, RIGHT].filter(m =>
+    isValidMove(b, m) && (!last || m !== OPPOSITE[last]));
+}
+
+// What would the hardness be after this move? (tries it, then undoes it)
+function hardnessAfter(b, move) {
+  makeMove(b, move);
+  const d = manhattan(b);
+  makeMove(b, OPPOSITE[move]);
+  return d;
+}
+
+// SMART SCRAMBLE: makes legal moves only (so the puzzle is always solvable) but
+//  1. never revisits a board it has already been in (no wasted loops), and
+//  2. with probability `smart`, picks a move that pushes tiles further from home.
+// A plain random scramble wanders back and forth and stays fairly easy.
+// This one walks steadily away from the solved board, so god mode is genuinely hard.
+function scramble(n, slides, smart) {
+  const b = startingBoard(n);
+  const seen = new Set([boardKey(b)]);
+  let last = null;
+  for (let i = 0; i < slides; i++) {
+    let opts = forwardMoves(b, last).map(m => {
+      makeMove(b, m);
+      const fresh = !seen.has(boardKey(b));
+      makeMove(b, OPPOSITE[m]);
+      return { m, fresh, d: hardnessAfter(b, m) };
+    });
+    const fresh = opts.filter(o => o.fresh);
+    if (fresh.length) opts = fresh;                       // avoid loops
+    let pool = opts;
+    if (Math.random() < smart) {
+      const best = Math.max(...opts.map(o => o.d));
+      pool = opts.filter(o => o.d === best);              // the most disordering moves
+    }
+    const pick = pool[Math.floor(Math.random() * pool.length)].m;
+    makeMove(b, pick);
+    seen.add(boardKey(b));
+    last = pick;
+  }
   return b;
 }
 
+// Make a puzzle: try `attempts` scrambles and keep the hardest one.
+// Always keeps trying (up to 60 times) if the puzzle came out too easy.
+function generatePuzzle(n, slides, smart, attempts) {
+  // "too easy" threshold, capped so small boards (which cannot get that hard) don't retry for nothing
+  const minHardness = Math.max(4, Math.min(Math.floor(slides * 0.3), n * n * 2));
+  let best = null, bestD = -1, tries = 0;
+  while (tries < attempts || (bestD < minHardness && tries < 60)) {
+    const b = scramble(n, slides, smart);
+    const d = manhattan(b);
+    if (d > bestD) { best = b; bestD = d; }
+    tries++;
+  }
+  return best;
+}
+/*LOGIC-END*/
+
+/* ===================== STATE ===================== */
+// menu choices
+const settings = {
+  timerOn: false, preset: 5,
+  diff: 'easy', size: 4,
+  blind: false, blindSecs: 3, peeks: 3,
+  peekSecs: CONFIG.peekSecs, peekCost: CONFIG.peekPenalty,
+  think: 0, pressure: false, adaptive: false
+};
+// current game (null when in menu). g.phase is 'study' (board locked), 'play' or 'over'.
+let g = null;
+let timerId = null;
+
+const $ = (id) => document.getElementById(id);
+const boardEl = $('board');
+
+function setScreen(name) { document.body.dataset.screen = name; }
+
 /* ===================== SCORE =====================
-   base       = max(1, scramble*2 - moves) * 10        fewer moves = higher
-   timeBonus  = secondsLeft * 5                        only when timer is on
-   raw        = base + timeBonus
-   score      = raw * difficultyMult * (size*size/9) * (blind ? 2 : 1) - peeks*penalty   (min 0) */
+   base      = max(1, hardness x 6 - moves) x 10        fewer moves = higher
+   timeBonus = seconds left x 5                         only when the timer is on
+   mult      = difficulty x (size x size / 9) x blind x (1 + 0.1 x level) x (pressure ? 1.25 : 1)
+   blind     = 1 + 3 / max(3, secondsYouSawTheNumbers)  less viewing time = bigger bonus
+   score     = (base + timeBonus) x mult - peeks x penalty      (never below 0) */
 function computeScore(moves, timeLeft) {
   const d = CONFIG.difficulty[g.diff];
-  const base = Math.max(1, g.scramble * 2 - moves) * 10;
+  const base = Math.max(1, g.rating * 6 - moves) * 10;
   const bonus = (g.timerSecs !== null && timeLeft) ? Math.floor(timeLeft * 5) : 0;
-  const mult = d.scoreMult * (g.n * g.n) / 9 * (g.blind ? 2 : 1);
-  return Math.max(0, Math.floor((base + bonus) * mult) - g.peeks * CONFIG.peekPenalty);
+  const blindMult = g.blind ? 1 + 3 / Math.max(3, g.blindSecs) : 1;
+  const mult = d.scoreMult * (g.n * g.n) / 9 * blindMult * (1 + 0.1 * g.level) * (g.pressure ? 1.25 : 1);
+  return Math.max(0, Math.floor((base + bonus) * mult) - g.peeks * g.peekCost);
 }
 
 /* ===================== BEST SCORES (localStorage) ===================== */
-function scoreKey(diff, n, blind) { return `${diff}_${n}x${n}_${blind ? 'blind' : 'normal'}`; }
-
+// One best score per combination of settings (uses the live game, or the menu choices).
+function scoreKey() {
+  const s = g || {
+    diff: settings.diff, n: settings.size, blind: settings.blind, blindSecs: chosenBlindSecs(),
+    maxPeeks: chosenPeeks(), peekSecs: chosenPeekSecs(), peekCost: chosenPeekCost(),
+    pressure: settings.pressure, adaptive: settings.adaptive
+  };
+  return [s.diff, s.n + 'x' + s.n,
+    s.blind ? 'blind' + s.blindSecs + 's_' + s.maxPeeks + 'pk_' + s.peekSecs + 's_cost' + s.peekCost : 'normal',
+    s.pressure ? 'pressure' : '',
+    s.adaptive ? 'levelup' : ''].filter(Boolean).join('_');
+}
 function loadScores() {
-  try { return JSON.parse(localStorage.getItem('slidepuzzle_best')) || {}; }
+  try { return JSON.parse(localStorage.getItem('slidepuzzle_best_v2')) || {}; }
   catch (e) { return {}; }
 }
 function saveScore(key, val) {
   try {
     const data = loadScores(); data[key] = val;
-    localStorage.setItem('slidepuzzle_best', JSON.stringify(data));
+    localStorage.setItem('slidepuzzle_best_v2', JSON.stringify(data));
   } catch (e) { /* storage unavailable - ignore */ }
 }
 
 /* ===================== MENU ===================== */
-// Highlight the selected buttons and show/hide the minutes row.
+// Highlight the selected buttons and show/hide the extra rows.
 function renderMenu() {
+  const onOff = (v) => v ? 'on' : 'off';
   const sel = {
-    timer: settings.timerOn ? 'on' : 'off',
+    timer: onOff(settings.timerOn),
+    preset: $('minutes-input').value === '' ? String(settings.preset) : '',
     diff: settings.diff,
     size: String(settings.size),
-    blind: settings.blind ? 'on' : 'off',
-    preset: $('minutes-input').value === '' ? String(settings.preset) : ''
+    blind: onOff(settings.blind),
+    blindsecs: $('blind-input').value === '' ? String(settings.blindSecs) : '',
+    peeks: $('peeks-input').value === '' ? String(settings.peeks) : '',
+    peeksecs: $('peeksecs-input').value === '' ? String(settings.peekSecs) : '',
+    peekcost: $('peekcost-input').value === '' ? String(settings.peekCost) : '',
+    think: String(settings.think),
+    pressure: onOff(settings.pressure),
+    adaptive: onOff(settings.adaptive)
   };
   document.querySelectorAll('.option-btn').forEach(btn => {
     btn.classList.toggle('selected', sel[btn.dataset.group] === btn.dataset.value);
   });
   $('minutes-row').classList.toggle('hidden', !settings.timerOn);
+  $('blind-rows').classList.toggle('hidden', !settings.blind);
+  $('think-row').classList.toggle('hidden', settings.blind);   // blind mode already has its own locked study time
 
-  const best = loadScores()[scoreKey(settings.diff, settings.size, settings.blind)];
+  const best = loadScores()[scoreKey()];
   $('best-line').textContent = best !== undefined ? `best  ${best}` : '';
 }
 
 document.querySelectorAll('.option-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    const v = btn.dataset.value;
+    const v = btn.dataset.value, on = (v === 'on');
     switch (btn.dataset.group) {
-      case 'timer':  settings.timerOn = (v === 'on'); break;
-      case 'diff':   settings.diff = v; break;
-      case 'size':   settings.size = parseInt(v, 10); break;
-      case 'blind':  settings.blind = (v === 'on'); break;
-      case 'preset': settings.preset = parseInt(v, 10); $('minutes-input').value = ''; break;
+      case 'timer':     settings.timerOn = on; break;
+      case 'preset':    settings.preset = parseInt(v, 10); $('minutes-input').value = ''; break;
+      case 'diff':      settings.diff = v; break;
+      case 'size':      settings.size = parseInt(v, 10); break;
+      case 'blind':     settings.blind = on; break;
+      case 'blindsecs': settings.blindSecs = parseInt(v, 10); $('blind-input').value = ''; break;
+      case 'peeks':     settings.peeks = parseInt(v, 10); $('peeks-input').value = ''; break;
+      case 'peeksecs':  settings.peekSecs = parseFloat(v); $('peeksecs-input').value = ''; break;
+      case 'peekcost':  settings.peekCost = parseInt(v, 10); $('peekcost-input').value = ''; break;
+      case 'think':     settings.think = parseInt(v, 10); break;
+      case 'pressure':  settings.pressure = on; break;
+      case 'adaptive':  settings.adaptive = on; break;
     }
     renderMenu();
   });
 });
 $('minutes-input').addEventListener('input', renderMenu);
+$('blind-input').addEventListener('input', renderMenu);
+$('peeks-input').addEventListener('input', renderMenu);
+$('peeksecs-input').addEventListener('input', renderMenu);
+$('peekcost-input').addEventListener('input', renderMenu);
 
-// Work out the timer length in seconds (null = timer off). Bad input falls back to a default.
+// Timer length in seconds (null = timer off). Bad input falls back to a default.
 function chosenTimerSecs() {
   if (!settings.timerOn) return null;
   let mins = parseInt($('minutes-input').value, 10);
@@ -407,48 +584,94 @@ function chosenTimerSecs() {
   return Math.min(mins, 99) * 60;
 }
 
+// Seconds the numbers stay visible in blind mode (1 to 60).
+function chosenBlindSecs() {
+  const v = parseInt($('blind-input').value, 10);
+  return (!isNaN(v) && v > 0) ? Math.min(v, 60) : settings.blindSecs;
+}
+
+// Custom peek settings: a typed value wins, a bad or empty box falls back to the chosen button.
+function chosenPeeks() {                           // peeks per game (0 to 50)
+  const v = parseInt($('peeks-input').value, 10);
+  return (!isNaN(v) && v >= 0) ? Math.min(v, 50) : settings.peeks;
+}
+function chosenPeekSecs() {                        // how long one peek lasts (0.5 to 10 seconds)
+  const v = parseFloat($('peeksecs-input').value);
+  return (!isNaN(v) && v > 0) ? Math.min(Math.max(v, 0.5), 10) : settings.peekSecs;
+}
+function chosenPeekCost() {                        // score lost per peek (0 to 1000)
+  const v = parseInt($('peekcost-input').value, 10);
+  return (!isNaN(v) && v >= 0) ? Math.min(v, 1000) : settings.peekCost;
+}
+
 /* ===================== GAME SETUP ===================== */
 function startGame() {
-  const d = CONFIG.difficulty[settings.diff];
-  const n = settings.size;
+  const blindSecs = chosenBlindSecs();
   g = {
-    n,
+    n: settings.size,
     diff: settings.diff,
-    scramble: d.scramble,
     blind: settings.blind,
+    blindSecs,
+    maxPeeks: chosenPeeks(),
+    peekSecs: chosenPeekSecs(),
+    peekCost: chosenPeekCost(),
+    studySecs: settings.blind ? blindSecs : settings.think,   // locked "look and plan" time before the clock starts
+    pressure: settings.pressure,
+    adaptive: settings.adaptive,
+    level: 0,
     timerSecs: chosenTimerSecs(),
-    moveLimit: d.moveFactor ? Math.floor(d.scramble * d.moveFactor) : null,
-    board: null, initial: null,
-    moves: 0, peeks: 0,
-    startTime: 0, peeking: false,
-    over: false, tiles: {}
+    board: null, initial: null, rating: 0, moveLimit: null, idleSecs: 10,
+    moves: 0, peeks: 0, peeking: false,
+    phase: 'study', studyEnd: 0, startTime: 0, lastAction: 0,
+    notice: null, drag: null, tiles: {}
   };
   newPuzzle();
   buildTiles();
-  setScreen('game');
-  startLoop();
 }
 
-// Generate a fresh puzzle with the same settings.
+// Generate a fresh puzzle with the same settings (level-up mode makes it harder).
 function newPuzzle() {
-  g.board = generatePuzzle(g.n, g.scramble);
+  const d = CONFIG.difficulty[g.diff];
+  const slides = Math.round(d.scramble * (1 + CONFIG.levelStep * g.level));
+  const smart = Math.min(0.95, d.smart + 0.05 * g.level);
+  g.board = generatePuzzle(g.n, slides, smart, d.attempts);
   g.initial = copyBoard(g.board);
+  g.rating = manhattan(g.board);
+  g.moveLimit = d.moveFactor ? Math.ceil(g.rating * d.moveFactor) : null;
+  g.idleSecs = Math.max(3, +(d.idleSecs * g.n / 4 - 0.5 * g.level).toFixed(1));
   resetRun();
 }
 
-// Reset counters and timer (keeps the current puzzle).
+// Reset counters and timers (keeps the current puzzle).
 function resetRun() {
-  g.moves = 0; g.peeks = 0; g.peeking = false; g.over = false;
-  g.startTime = performance.now();
+  g.moves = 0; g.peeks = 0; g.peeking = false; g.drag = null; g.notice = null;
   boardEl.classList.remove('solved', 'blind', 'peek');
+  clearAllOffsets();
+  const now = performance.now();
+  g.lastAction = now;
+  if (g.studySecs > 0) {
+    g.phase = 'study'; g.studyEnd = now + g.studySecs * 1000; g.startTime = 0;
+  } else {
+    g.phase = 'play'; g.startTime = now;
+    if (g.blind) boardEl.classList.add('blind');
+  }
   setScreen('game');
   render();
   updateHud();
   startLoop();
 }
 
-function restartGame() { g.board = copyBoard(g.initial); resetRun(); }
-function newGame() { newPuzzle(); }
+function restartGame() { if (!g) return; g.board = copyBoard(g.initial); resetRun(); }
+function newGame() { if (g) newPuzzle(); }
+
+// End the locked study phase and start the clock.
+function beginPlay() {
+  if (!g || g.phase !== 'study') return;
+  const now = performance.now();
+  g.phase = 'play'; g.startTime = now; g.lastAction = now;
+  if (g.blind) boardEl.classList.add('blind');      // numbers fade out
+  updateHud();
+}
 
 // Create one DOM tile per number (kept between moves so CSS can animate them).
 function buildTiles() {
@@ -458,13 +681,15 @@ function buildTiles() {
   for (let num = 1; num < g.n * g.n; num++) {
     const t = document.createElement('div');
     t.className = 'tile';
+    t.dataset.num = num;
     t.innerHTML = '<div class="tile-face"><span class="tile-number">' + num + '</span></div>';
-    t.addEventListener('click', () => onTileClick(num));
     boardEl.appendChild(t);
     g.tiles[num] = t;
   }
-  $('peek-btn').classList.toggle('hidden', !g.blind);
+  $('peek-btn').classList.toggle('hidden', !(g.blind && g.maxPeeks > 0));
+  $('pressure').classList.toggle('hidden', !g.pressure);
   render();
+  updateHud();
 }
 
 // Move every tile to its board position (CSS transition does the sliding).
@@ -479,39 +704,47 @@ function render() {
     }
 }
 
-/* ===================== PLAYING ===================== */
-function elapsedSecs() { return (performance.now() - g.startTime) / 1000; }
+/* ===================== MOVES ===================== */
+function elapsedSecs() { return g.phase === 'play' ? (performance.now() - g.startTime) / 1000 : 0; }
 function timeLeftSecs() { return g.timerSecs === null ? null : g.timerSecs - elapsedSecs(); }
 
-function slide(move) {
-  if (!g || g.over || !isValidMove(g.board, move)) return;
-  makeMove(g.board, move);
-  g.moves++;
+// Apply `k` identical moves in one go (a whole row or column sliding), then check the result.
+function doSlides(move, k) {
+  for (let i = 0; i < k; i++) makeMove(g.board, move);
+  g.moves += k;
+  g.lastAction = performance.now();
   render();
+  afterMove();
+}
 
+function afterMove() {
   if (boardsEqual(g.board, startingBoard(g.n))) { winGame(); return; }
   if (g.moveLimit && g.moves >= g.moveLimit) { loseGame('no moves left'); return; }
   updateHud();
 }
 
-// Clicking a tile slides it only if it is next to the blank.
-function onTileClick(num) {
-  if (!g || g.over) return;
-  let tx, ty;
-  for (let x = 0; x < g.n; x++)
-    for (let y = 0; y < g.n; y++) if (g.board[x][y] === num) { tx = x; ty = y; }
-  const { x: bx, y: by } = blankPos(g.board);
-  if (tx === bx + 1 && ty === by) slide(LEFT);
-  else if (tx === bx - 1 && ty === by) slide(RIGHT);
-  else if (tx === bx && ty === by + 1) slide(UP);
-  else if (tx === bx && ty === by - 1) slide(DOWN);
+// One tile slides (keyboard and swipe use this).
+function slide(move) {
+  if (!g || g.phase !== 'play' || !isValidMove(g.board, move)) return;
+  doSlides(move, 1);
+}
+
+// Pressure mode: the board makes its own (worst) legal move.
+function autoMove() {
+  const opts = [UP, DOWN, LEFT, RIGHT].filter(m => isValidMove(g.board, m))
+    .map(m => ({ m, d: hardnessAfter(g.board, m) }));
+  const worst = Math.max(...opts.map(o => o.d));
+  const pool = opts.filter(o => o.d === worst);
+  makeMove(g.board, pool[Math.floor(Math.random() * pool.length)].m);
+  g.lastAction = performance.now();
+  g.notice = { text: 'the board moved. think faster', until: performance.now() + 1500 };
+  render();
+  if (boardsEqual(g.board, startingBoard(g.n))) winGame(); else updateHud();
 }
 
 // Show the numbers for a moment (blind mode only, limited uses, costs score).
 function peek() {
-  if (!g || g.over || !g.blind || g.peeking) return;
-  if (elapsedSecs() < CONFIG.blindShowSecs + CONFIG.blindFadeSecs) return;
-  if (g.peeks >= CONFIG.maxPeeks) return;
+  if (!g || g.phase !== 'play' || !g.blind || g.peeking || g.peeks >= g.maxPeeks) return;
   g.peeks++;
   g.peeking = true;
   boardEl.classList.add('peek');
@@ -519,77 +752,231 @@ function peek() {
   setTimeout(() => {
     boardEl.classList.remove('peek');
     if (g) g.peeking = false;
-  }, CONFIG.peekSecs * 1000);
+  }, g.peekSecs * 1000);
 }
 
+/* ===================== DRAG, TAP AND SWIPE =====================
+   - drag a tile next to the blank (or any tile in the same row/column: the whole line moves)
+   - tap a tile to slide it
+   - swipe anywhere else on the board to slide a tile in that direction */
+function cellSize() { return boardEl.clientWidth / g.n; }
+
+// If this tile is in the same row/column as the blank, describe the slide it can make.
+function lineInfo(num) {
+  let tx = -1, ty = -1;
+  for (let x = 0; x < g.n; x++)
+    for (let y = 0; y < g.n; y++) if (g.board[x][y] === num) { tx = x; ty = y; }
+  const { x: bx, y: by } = blankPos(g.board);
+  const nums = [];
+  let move;
+  if (tx === bx && ty !== by) {
+    move = by < ty ? UP : DOWN;
+    const s = Math.sign(ty - by);
+    for (let y = by + s; ; y += s) { nums.push(g.board[tx][y]); if (y === ty) break; }
+  } else if (ty === by && tx !== bx) {
+    move = bx < tx ? LEFT : RIGHT;
+    const s = Math.sign(tx - bx);
+    for (let x = bx + s; ; x += s) { nums.push(g.board[x][ty]); if (x === tx) break; }
+  } else return null;
+  const v = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[move];
+  return { move, k: nums.length, ux: v[0], uy: v[1], els: nums.map(n => g.tiles[n]) };
+}
+
+function setOffset(info, px) {
+  info.els.forEach(el => {
+    el.style.setProperty('--dx', (px * info.ux) + 'px');
+    el.style.setProperty('--dy', (px * info.uy) + 'px');
+  });
+}
+function clearOffset(info) {                       // springs back with the CSS transition
+  info.els.forEach(el => el.classList.remove('dragging'));
+  setOffset(info, 0);
+}
+function clearAllOffsets() {
+  Object.values(g.tiles).forEach(el => {
+    el.classList.remove('dragging');
+    el.style.setProperty('--dx', '0px');
+    el.style.setProperty('--dy', '0px');
+  });
+}
+
+// Finish a slide: the tiles continue from where the finger left them.
+function commitLine(info, progress) {
+  const cell = cellSize();
+  info.els.forEach(el => el.classList.add('dragging'));
+  setOffset(info, progress * cell - cell);         // new grid position minus one cell = same spot on screen
+  doSlides(info.move, info.k);
+  void boardEl.offsetWidth;                        // let the browser register that position
+  info.els.forEach(el => el.classList.remove('dragging'));
+  setOffset(info, 0);                              // now animate the rest of the way
+}
+
+boardEl.addEventListener('pointerdown', (e) => {
+  if (!g || g.phase !== 'play' || g.drag) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const el = e.target.closest('.tile');
+  g.drag = {
+    id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: performance.now(),
+    info: el ? lineInfo(Number(el.dataset.num)) : null, progress: 0, moved: false
+  };
+  try { boardEl.setPointerCapture(e.pointerId); } catch (err) { /* not supported - fine */ }
+});
+
+boardEl.addEventListener('pointermove', (e) => {
+  if (!g || !g.drag || e.pointerId !== g.drag.id) return;
+  const dr = g.drag;
+  g.lastAction = performance.now();
+  if (!dr.info) return;
+  const dx = e.clientX - dr.x0, dy = e.clientY - dr.y0;
+  if (!dr.moved && Math.hypot(dx, dy) > 4) {
+    dr.moved = true;
+    dr.info.els.forEach(el => el.classList.add('dragging'));
+  }
+  if (dr.moved) {
+    const cell = cellSize();
+    dr.progress = Math.max(0, Math.min(1, (dx * dr.info.ux + dy * dr.info.uy) / cell));
+    setOffset(dr.info, dr.progress * cell);
+  }
+});
+
+function endDrag(e, cancelled) {
+  if (!g || !g.drag || e.pointerId !== g.drag.id) return;
+  const dr = g.drag;
+  g.drag = null;
+  try { boardEl.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  if (cancelled || g.phase !== 'play') { if (dr.info) clearOffset(dr.info); return; }
+
+  const dx = e.clientX - dr.x0, dy = e.clientY - dr.y0;
+  const dist = Math.hypot(dx, dy), dt = performance.now() - dr.t0;
+  if (dr.info) {
+    const tap = dist < 8 && dt < 600;
+    const flick = dt < 250 && dr.progress > 0.08;
+    if (tap || flick || dr.progress >= 0.3) commitLine(dr.info, tap ? 0 : dr.progress);
+    else clearOffset(dr.info);
+  } else if (dist >= 24) {
+    const horizontal = Math.abs(dx) > Math.abs(dy);
+    slide(horizontal ? (dx > 0 ? RIGHT : LEFT) : (dy > 0 ? DOWN : UP));
+  }
+}
+boardEl.addEventListener('pointerup', (e) => endDrag(e, false));
+boardEl.addEventListener('pointercancel', (e) => endDrag(e, true));
+
+/* ===================== HUD AND TIMER LOOP ===================== */
 function formatTime(secs) {
   secs = Math.max(0, Math.floor(secs));
   return String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(secs % 60).padStart(2, '0');
 }
 
+function infoText(now) {
+  if (g.notice && now < g.notice.until) return g.notice.text;
+  const parts = [];
+  if (g.phase === 'study') {
+    const left = Math.max(0, Math.ceil((g.studyEnd - now) / 1000));
+    parts.push((g.blind ? 'memorise ' : 'plan ') + left + 's');
+  }
+  parts.push('hardness ' + g.rating);
+  if (g.adaptive) parts.push('lv ' + g.level);
+  if (g.phase === 'play' && g.blind) parts.push('peeks ' + g.peeks + '/' + g.maxPeeks);
+  return parts.join(' · ');
+}
+
 // Refresh the HUD text.
 function updateHud() {
+  if (!g) return;
+  const now = performance.now();
   const tl = timeLeftSecs();
   const timeEl = $('time');
   if (tl === null) {
-    timeEl.textContent = formatTime(elapsedSecs());   // timer off: count up, just for info
+    timeEl.textContent = formatTime(elapsedSecs());          // timer off: count up, just for info
     timeEl.classList.remove('low');
   } else {
     timeEl.textContent = formatTime(Math.ceil(tl));
-    timeEl.classList.toggle('low', tl <= 30);
+    timeEl.classList.toggle('low', tl <= 30 && g.phase === 'play');
   }
   $('moves').textContent = 'moves ' + g.moves + (g.moveLimit ? ' / ' + g.moveLimit : '');
   $('score').textContent = 'score ' + computeScore(g.moves, tl === null ? 0 : Math.max(0, tl));
 
-  const info = $('blind-info');
-  if (!g.blind) { info.textContent = ''; return; }
-  const e = elapsedSecs();
-  info.textContent = e < CONFIG.blindShowSecs
-    ? 'memorise  ' + Math.ceil(CONFIG.blindShowSecs - e)
-    : 'peeks ' + g.peeks + '/' + CONFIG.maxPeeks + '  [space]';
+  const info = $('info');
+  info.textContent = infoText(now);
+  info.classList.toggle('study', g.phase === 'study');
+  $('go-btn').classList.toggle('hidden', g.phase !== 'study');
+
+  if (g.pressure) {
+    const pct = g.phase === 'play' ? Math.min(100, (now - g.lastAction) / 10 / g.idleSecs) : 0;
+    $('pressure-bar').style.width = pct + '%';
+    $('pressure').classList.toggle('hot', pct > 66);
+  }
 }
 
-// Runs ~10 times per second: timer, blind-mode fade, HUD.
+// Runs ~10 times per second: study countdown, game timer, pressure mode, HUD.
 function startLoop() {
   clearInterval(timerId);
   timerId = setInterval(() => {
-    if (!g || g.over) return;
-    if (g.blind && elapsedSecs() >= CONFIG.blindShowSecs) boardEl.classList.add('blind');
+    if (!g || g.phase === 'over') return;
+    const now = performance.now();
+    if (g.phase === 'study') {
+      if (now >= g.studyEnd) beginPlay(); else updateHud();
+      return;
+    }
     const tl = timeLeftSecs();
     if (tl !== null && tl <= 0) { loseGame("time's up"); return; }
-    updateHud();
+    if (g.drag) g.lastAction = now;                          // never move the board under your finger
+    if (g.pressure && (now - g.lastAction) / 1000 >= g.idleSecs) autoMove();
+    if (g.phase === 'play') updateHud();
   }, 100);
 }
 
 function stopLoop() { clearInterval(timerId); timerId = null; }
 
 /* ===================== END OF GAME ===================== */
+// How efficiently did you solve it? Compares your moves with the minimum possible.
+function efficiencyLabel(ratio) {
+  if (ratio < 1.8) return 'genius';
+  if (ratio < 2.8) return 'sharp';
+  if (ratio < 4.5) return 'solid';
+  return 'brute force';
+}
+
 function winGame() {
-  g.over = true; stopLoop();
   const tl = timeLeftSecs();
+  const secs = elapsedSecs();
   const score = computeScore(g.moves, tl === null ? 0 : Math.max(0, tl));
-  const key = scoreKey(g.diff, g.n, g.blind);
+  g.phase = 'over'; stopLoop();
+
+  const key = scoreKey();
   const best = loadScores()[key];
   const isBest = best === undefined || score > best;
   if (isBest) saveScore(key, score);
 
+  const ratio = g.moves / Math.max(1, g.rating);
+  let rating = efficiencyLabel(ratio) + ' · ' + ratio.toFixed(1) + 'x the minimum moves';
+  if (g.adaptive) {
+    g.level = Math.min(CONFIG.maxLevel, g.level + 1);
+    rating += ' · next: level ' + g.level;
+  }
   boardEl.classList.remove('blind', 'peek');
   boardEl.classList.add('solved');
   $('final-score').textContent = 'score ' + score;
   $('new-best').classList.toggle('hidden', !isBest);
-  $('final-stats').textContent = 'moves ' + g.moves + '  ·  time ' + formatTime(elapsedSecs());
+  $('final-stats').textContent = 'moves ' + g.moves + '  ·  time ' + formatTime(secs);
+  $('final-rating').textContent = rating;
   setScreen('solved');
 }
 
 function loseGame(reason) {
-  g.over = true; stopLoop();
+  g.phase = 'over'; stopLoop();
+  let stats = 'moves ' + g.moves;
+  if (g.adaptive) {
+    g.level = Math.max(0, g.level - 1);
+    stats += '  ·  next: level ' + g.level;
+  }
   $('fail-msg').textContent = reason;
-  $('fail-stats').textContent = 'moves ' + g.moves;
+  $('fail-stats').textContent = stats;
   setScreen('timeup');
 }
 
 function goMenu() {
-  if (g) g.over = true;
+  if (g) g.phase = 'over';
   stopLoop();
   g = null;
   renderMenu();
@@ -598,6 +985,7 @@ function goMenu() {
 
 /* ===================== BUTTONS ===================== */
 $('start-btn').addEventListener('click', startGame);
+$('go-btn').addEventListener('click', beginPlay);
 $('restart-btn').addEventListener('click', restartGame);
 $('new-btn').addEventListener('click', newGame);
 $('peek-btn').addEventListener('click', peek);
@@ -608,25 +996,35 @@ $('retry-btn').addEventListener('click', restartGame);
 $('timeup-new-btn').addEventListener('click', newGame);
 $('timeup-menu-btn').addEventListener('click', goMenu);
 
+// After tapping a game button, drop focus so Space and Enter go to the game, not the button.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('.btn');
+  if (b && b.closest('#game, .overlay')) b.blur();
+});
+
 /* ===================== KEYBOARD ===================== */
 document.addEventListener('keydown', (e) => {
   if (!g) return;                                   // keys only matter in a game
   if (e.target && e.target.tagName === 'INPUT') return;
-  const screen = document.body.dataset.screen;
   const k = e.key.toLowerCase();
 
   if (k === 'escape') { goMenu(); return; }
   if (k === 'n') { newGame(); return; }
   if (k === 'r') { restartGame(); return; }
+  if (document.body.dataset.screen !== 'game') return;
 
-  if (screen !== 'game') return;
-  if (k === ' ') { e.preventDefault(); peek(); return; }
+  if (k === ' ' || k === 'enter') {                 // go (while studying) or peek (while playing)
+    e.preventDefault();
+    if (g.phase === 'study') beginPlay(); else peek();
+    return;
+  }
   const map = { arrowleft: LEFT, a: LEFT, arrowright: RIGHT, d: RIGHT,
                 arrowup: UP, w: UP, arrowdown: DOWN, s: DOWN };
   if (map[k]) { e.preventDefault(); slide(map[k]); }
 });
 
 /* ===================== INIT ===================== */
+document.documentElement.style.setProperty('--fade', CONFIG.blindFadeSecs + 's');
 renderMenu();
 </script>
 </body>
